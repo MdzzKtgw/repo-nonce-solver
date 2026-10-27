@@ -11,6 +11,7 @@ static int *clStart, *clLen, *clLits;        // clauses
 static int *occStart, *occList;             // per literal-index occurrences
 static signed char *assign;                 // 0/1 per var (1-based)
 static int *satCnt;                         // true literals per clause
+static int bestU=1<<30;
 static int *unsatList, *unsatPos, nUnsat;    // unsat clause set with O(1) removal
 static unsigned long long rngState;
 static inline unsigned long long xr(void){ rngState^=rngState<<13; rngState^=rngState>>7; rngState^=rngState<<17; return rngState; }
@@ -72,7 +73,7 @@ int main(int argc, char**argv){
         memset(satCnt,0,sizeof(int)*nC);
         for(int c=0;c<nC;c++){ int sc=0; for(int j=clStart[c];j<clStart[c]+clLen[c];j++) if(litTrue(clLits[j])) sc++; satCnt[c]=sc; }
         nUnsat=0; for(int c=0;c<nC;c++){ unsatPos[c]=-1; if(satCnt[c]==0) unsatAdd(c); }
-        long long flips=0; long long maxFlips=20000000LL;
+        long long flips=0; long long maxFlips=getenv("MF")?atoll(getenv("MF")):20000000LL;
         while(nUnsat>0 && flips<maxFlips){
             int c=unsatList[xr()%nUnsat];
             int base=clStart[c], len=clLen[c];
@@ -80,11 +81,11 @@ int main(int argc, char**argv){
             for(int j=0;j<len;j++){ int lit=clLits[base+j]; int v=lit<0?-lit:lit; vars[j]=v; int b=breakCount(v); double wj = b<=TMAX ? wtab[b] : pow(1.0+b,-beta); w[j]=wj; sum+=wj; }
             double r=(xr()>>11)*(1.0/9007199254740992.0)*sum; int pick=len-1;
             for(int j=0;j<len;j++){ r-=w[j]; if(r<=0){ pick=j; break; } }
-            flipVar(vars[pick]); flips++;
+            flipVar(vars[pick]); flips++; if(nUnsat<bestU){bestU=nUnsat;}
             if((flips&0x3FFF)==0){
                 struct timespec tn; clock_gettime(CLOCK_MONOTONIC,&tn);
                 double el=(tn.tv_sec-t0.tv_sec)+(tn.tv_nsec-t0.tv_nsec)/1e9;
-                if(el>maxSec) return 1;
+                if(el>maxSec){fprintf(stderr,"BEST %d\n",bestU);return 1;}
             }
         }
         totalFlips+=flips;
@@ -96,6 +97,6 @@ int main(int argc, char**argv){
         }
         struct timespec tn; clock_gettime(CLOCK_MONOTONIC,&tn);
         double el=(tn.tv_sec-t0.tv_sec)+(tn.tv_nsec-t0.tv_nsec)/1e9;
-        if(el>maxSec) return 1;
+        if(el>maxSec){fprintf(stderr,"BEST %d\n",bestU);return 1;}
     }
 }
